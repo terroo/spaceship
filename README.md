@@ -1,2 +1,2 @@
 # spaceship
-A basic game made with Java i LibGDX
+> A basic game made with Java i LibGDX
