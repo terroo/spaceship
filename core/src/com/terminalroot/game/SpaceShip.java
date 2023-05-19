@@ -8,21 +8,30 @@ import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 
-
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.TimeUtils;
 import java.util.Iterator;
 
+
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.Color;
+
 public class SpaceShip extends ApplicationAdapter {
   SpriteBatch batch;
   Texture img, tNave, tMissile, tEnemy;
   private Sprite nave, missile;
   private float posX, posY, velocity, xMissile, yMissile;
-  private boolean attack;
+  private boolean attack, gameover;
   private Array<Rectangle> enemies;
   private long lastEnemyTime;
+  private int score, power, numEnemies;
+
+  private FreeTypeFontGenerator generator;
+  private FreeTypeFontGenerator.FreeTypeFontParameter parameter;
+  private BitmapFont bitmap;
 
   @Override
   public void create () {
@@ -43,7 +52,21 @@ public class SpaceShip extends ApplicationAdapter {
     tEnemy = new Texture("enemy.png");
     enemies = new Array<Rectangle>();
     lastEnemyTime = 0;
+
+    score = 0;
+    power = 3;
+    numEnemies = 799999999;
+
+    generator = new FreeTypeFontGenerator(Gdx.files.internal("font.ttf"));
+    parameter = new FreeTypeFontGenerator.FreeTypeFontParameter();
     
+    parameter.size = 30;
+    parameter.borderWidth = 1;
+    parameter.borderColor = Color.BLACK;
+    parameter.color = Color.WHITE;
+    bitmap = generator.generateFont(parameter);
+
+    gameover = false;
   }
 
   @Override
@@ -56,14 +79,41 @@ public class SpaceShip extends ApplicationAdapter {
     ScreenUtils.clear(1, 0, 0, 1);
     batch.begin();
     batch.draw(img, 0, 0);
-    if(attack){
-      batch.draw(missile, xMissile + nave.getWidth() / 2, yMissile + nave.getHeight() / 2 - 12);
-    }
-    batch.draw(nave, posX, posY);
 
-    for(Rectangle enemy : enemies ){
-      batch.draw(tEnemy, enemy.x, enemy.y);
+    if(!gameover){
+      if(attack){
+        // ALTERADO
+        batch.draw(missile, xMissile, yMissile);
+      }
+      batch.draw(nave, posX, posY);
+
+      for(Rectangle enemy : enemies ){
+        batch.draw(tEnemy, enemy.x, enemy.y);
+      }
+      bitmap.draw(batch, "Score: " + score, 20, Gdx.graphics.getHeight() - 20);
+      bitmap.draw(
+          batch, "Power: " + power, 
+          Gdx.graphics.getWidth() - 150, 
+          Gdx.graphics.getHeight() - 20
+          );
+    }else{
+      bitmap.draw(batch, "Score: " + score, 20, Gdx.graphics.getHeight() - 20);
+      bitmap.draw(
+          batch, "GAME OVER", 
+          Gdx.graphics.getWidth() - 150, 
+          Gdx.graphics.getHeight() - 20
+          );
+
+      if( Gdx.input.isKeyPressed(Input.Keys.ENTER) ){
+        score = 0;
+        power = 3;
+        posX = 0;
+        posY = 0;
+        gameover = false;
+      }
     }
+
+
     batch.end();
   }
 
@@ -100,19 +150,22 @@ public class SpaceShip extends ApplicationAdapter {
   private void moveMissile(){
     if( Gdx.input.isKeyPressed(Input.Keys.SPACE) && !attack ){
       attack = true;
-      yMissile = posY;
+      // ALTERADO
+      yMissile = posY  + nave.getHeight() / 2 - 12;
     }
 
     if(attack){
       if( xMissile < Gdx.graphics.getWidth() ){
         xMissile += 40;
       }else{
-        xMissile = posX;
+        // ALTERADO
+        xMissile = posX + nave.getWidth() / 2;
         attack = false;
       }
     }else{
-      xMissile = posX;
-      yMissile = posY;
+      // ALTERADO
+      xMissile = posX + nave.getWidth() / 2;
+      yMissile = posY  + nave.getHeight() / 2 - 12;
     }
   }
 
@@ -124,7 +177,7 @@ public class SpaceShip extends ApplicationAdapter {
 
   private void moveEnemies(){
 
-    if( TimeUtils.nanoTime() - lastEnemyTime > 999999999 ){
+    if( TimeUtils.nanoTime() - lastEnemyTime > numEnemies ){
       this.spawnEnemies();
     }
 
@@ -132,9 +185,35 @@ public class SpaceShip extends ApplicationAdapter {
     for( Iterator<Rectangle> iter = enemies.iterator(); iter.hasNext(); ){
       Rectangle enemy = iter.next();
       enemy.x -= 400 * Gdx.graphics.getDeltaTime();
+
+      // Colisão com o míssel
+      if( collide(enemy.x, enemy.y, enemy.width, enemy.height, xMissile, yMissile, missile.getWidth(), missile.getHeight()) && attack ){
+        ++score;
+        if( score % 10 == 0 ){
+          numEnemies -= 100;
+        }
+        //System.out.println("Score: " + ++score);
+        attack = false;
+        iter.remove();
+      // Colisão com a nave
+      }else if( collide(enemy.x, enemy.y, enemy.width, enemy.height, posX, posY, nave.getWidth(), nave.getHeight()) && !gameover ){
+        --power;
+        if( power <= 0 ){
+          gameover = true;
+        }
+        iter.remove();
+      }
+
       if(enemy.x + tEnemy.getWidth() < 0){
         iter.remove();
       }
     }
+  }
+
+  private boolean collide(float x1, float y1, float w1, float h1, float x2, float y2, float w2, float h2){
+    if( x1 + w1 > x2 && x1 < x2 + w2 && y1 + h1 > y2 && y1 < y2 + h2 ){
+      return true;
+    }
+    return false;
   }
 }
